@@ -42,7 +42,6 @@ python main.py --params_name criteo_trace
 python main.py --params_name taobao_trace
 
 # Baselines
-python main.py --params_name criteo_pretrain
 python main.py --params_name criteo_ce
 python main.py --params_name criteo_oracle
 ```
