@@ -13,7 +13,7 @@ TRACE consists of three core components:
 ## Quick Start
 ### 0. Dataset
 
-Replace the data path in criteo_data.py
+Replace the data path in criteo_data.py and taobao_data.py
 ```
 _local_path = "/path/to/data.txt"
 ```
