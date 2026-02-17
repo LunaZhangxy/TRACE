@@ -22,10 +22,10 @@ _local_path = "/path/to/data.txt"
 
 ```bash
 # Criteo
-python pretrain_all.py --dataset criteo --device cuda:0
+python pretrain.py --dataset criteo --device cuda:0
 
 # Taobao
-python pretrain_all.py --dataset taobao --device cuda:0
+python pretrain.py --dataset taobao --device cuda:0
 ```
 
 Checkpoints are saved to `./pretrain_model/`.
