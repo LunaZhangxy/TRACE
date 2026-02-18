@@ -35,7 +35,7 @@ def train_static_intent(dataset_name, pretrain_data, device,
 
     if dataset_name == "criteo":
         f_theta = CriteoMLP(output_size=2).to(device)
-        d_nt_idx = 6  # 30-day label (last window)
+        d_nt_idx = 5  # 30-day label (last window)
     else:
         f_theta = TaobaoMLP(output_size=2).to(device)
         d_nt_idx = -1  # last window
