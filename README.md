@@ -1,15 +1,5 @@
 # Follow the TRACE: Exploiting Post-Click Trajectories for Online Delayed Conversion Rate Prediction
 
-## Overview
-
-TRACE consists of three core components:
-
-| Component | Symbol | Description |
-|---|---|---|
-| **Static Intent Estimator** | f_θ(y\|x) | Captures intrinsic conversion intent from pre-click features |
-| **Dynamic Trajectory Estimator** | g_ψ(ξ\|x,y) | Scores how the evolving post-click trajectory aligns with each conversion hypothesis |
-| **Retrospective Trajectory Completer** | q_φ(y\|x,ξ) | Provides posterior guidance for unrevealed samples using full-lifecycle patterns |
-
 ## Quick Start
 ### 0. Dataset
 
@@ -50,5 +40,7 @@ python main.py --params_name criteo_oracle
 
 - Python ≥ 3.8
 - PyTorch ≥ 1.12
-- NumPy
-- scikit-learn (for metrics)
+- NumPy ≥ 1.21
+- scikit-learn ≥ 1.0
+- SciPy ≥ 1.7
+- pandas ≥ 1.3
