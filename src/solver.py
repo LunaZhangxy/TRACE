@@ -56,8 +56,7 @@ class Solver:
             self.d_nt = params["d_nt"]           # H: number of observation windows
             self.K = self.d_size // 2            # K: number of action types
             self.nt = params["nt"]
-            self.alpha = params["alpha"]
-            self.beta = float(params.get("beta", 1.0))
+            self.beta = params["beta"]
             assert self.d_type == "category"
 
             if self.dataset == "criteo":
@@ -74,10 +73,6 @@ class Solver:
             self.optimizer_psi = get_optimizer(
                 params["optimizer"], params)(self.g_psi.parameters())
 
-            # Monotonic regularization for cumulative trajectory
-            self.mono_reg_enable = bool(params.get("mono_reg_enable", False))
-            self.mono_reg_weight = float(params.get("mono_reg_weight", 0.0))
-
         # ---- Static intent estimator f_theta (Sec. 3.1) ----
         if self.dataset == "criteo":
             self.f_theta = CriteoMLP(output_size=self.y_class_num).to(self.device)
@@ -89,7 +84,7 @@ class Solver:
 
         # ---- Retrospective trajectory completer q_phi (Sec. 3.2) ----
         self.completer = None
-        self.lambda_con = float(params.get("lambda_con", 0.0))
+        self.lambda_con = float(params.get("lambda_con", 0.1))
         completer_path = params.get("completer_ckpt_path", None)
 
         if completer_path is not None and self.lambda_con > 0:
@@ -113,20 +108,15 @@ class Solver:
                 p.requires_grad = False
             print(f"[TRACE] Loaded retrospective completer from {completer_path}")
 
-        # Inference-time fusion
-        self.fuse_enable = bool(params.get("fuse_enable", self.completer is not None))
-
         self.global_stream_step = 0
         if self.method == "trace":
             self._h_arange = torch.arange(self.d_nt, device=self.device).view(1, -1)
 
-    # -------------------------------------------------------------- #
     # Reliability gate  w_i  (Sec. 3.2, Eq. 11)
-    # -------------------------------------------------------------- #
 
     def _compute_reliability_gate(self, p_online, q_completer, m):
         # v in [0,1]
-        v = confidence_score(q_completer)              # 1 - H(q), bits-based, clamped
+        v = confidence_score(q_completer)              # 1 - H(q)
 
         # H(p) in [0,1]
         H_p = binary_entropy_bits(p_online)            # bits entropy
@@ -141,9 +131,8 @@ class Solver:
 
         return w.detach(), v.detach(), H_p.detach(), kappa.detach()
 
-    # -------------------------------------------------------------- #
+
     # Horizon weight computation  eta_h  (Sec. 3.1, Eq. 6)
-    # -------------------------------------------------------------- #
 
     def compute_horizon_weights(self, y, d):
         """
@@ -188,8 +177,8 @@ class Solver:
         if torch.isfinite(max_nt) and max_nt > 0:
             nt = nt / max_nt
 
-        w_time = torch.exp(-self.beta * nt)
-        w_info = torch.exp(-self.alpha * cond_entropy)
+        w_time = torch.exp(-nt)
+        w_info = torch.exp(-self.beta * cond_entropy)
         max_w = w_info.max()
         if torch.isfinite(max_w) and max_w > 0:
             w_info = w_info / max_w
@@ -301,13 +290,6 @@ class Solver:
 
             d_loss = F.nll_loss(F.log_softmax(_pred, dim=1), _label, reduction="mean")
 
-            if self.mono_reg_enable and self.mono_reg_weight > 0 and self.K == 1:
-                with torch.no_grad():
-                    is_pos = (y.view(-1) == 1)
-                if is_pos.any():
-                    p1 = torch.softmax(d_pred, dim=-1)[is_pos, :, -1]
-                    penalty = torch.relu(p1[:, :-1] - p1[:, 1:]).mean()
-                    d_loss = d_loss + self.mono_reg_weight * penalty
 
             self.optimizer_psi.zero_grad()
             d_loss.backward()
@@ -583,18 +565,8 @@ class Solver:
                         log_e_y = (alpha_ih.unsqueeze(1) * log_prob_d).sum(dim=2)
                         log_prior = F.log_softmax(y_logits, dim=1).float()
                         post_logits = log_prior + log_e_y
-                        post_prob = torch.softmax(post_logits, dim=1)
+                        prob = torch.softmax(post_logits, dim=1)
 
-                        # Optional: fuse with retrospective completer at inference
-                        if self.fuse_enable and self.completer is not None:
-                            o_in = _d if _d.dim() == 3 else _d.unsqueeze(-1)
-                            q_prob = self.completer(_x, o_in, _m)
-                            p_s = post_prob[:, 1]
-                            w, *_ = self._compute_reliability_gate(p_s, q_prob, _m)
-                            p_fused = (1.0 - w) * p_s + w * q_prob
-                            prob = torch.stack([1.0 - p_fused, p_fused], dim=1)
-                        else:
-                            prob = post_prob
 
                 if not torch.isfinite(prob).all():
                     prob = torch.nan_to_num(prob, nan=0.0, posinf=1.0, neginf=0.0)
@@ -605,7 +577,6 @@ class Solver:
         return {"prob": torch.cat(probs, dim=0)}
 
 
-    # Streaming train-and-predict loop
     def stream_train_and_predict(self):
         stream_metric = MetricAccumulator()
         stream_pred = []
