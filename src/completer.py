@@ -30,7 +30,7 @@ class CriteoCompleter(nn.Module):
         self,
         hidden_size: int = 256,
         horizon_embed_dim: int = 16,
-        H: int = 7,
+        H: int = 6,
         embedding_size: int = 32,
     ):
         super().__init__()
