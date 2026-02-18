@@ -7,7 +7,7 @@ trajectory completion (Sec. 3.2), and unified optimisation (Sec. 3.3).
 
 Supports both datasets:
   - Criteo:  K=1 (purchase only)
-  - Taobao:  K=3 (pay, cart, fav)
+  - Taobao:  K=3 (purchase, cart, fav)
 """
 
 import os
@@ -28,12 +28,9 @@ def binary_entropy_bits(p, eps=1e-8):
     p = p.clamp(eps, 1 - eps)
     return -(p * torch.log2(p) + (1 - p) * torch.log2(1 - p))
 
-
 def confidence_score(p, eps=1e-6):
     """Completer confidence: v = 1 - H(p) (bits), clamped to [0, 1]."""
     return (1.0 - binary_entropy_bits(p, eps)).clamp(0.0, 1.0)
-
-
 
 
 class Solver:
@@ -92,7 +89,7 @@ class Solver:
                 self.completer = CriteoCompleter(
                     hidden_size=self.hidden_size,
                     horizon_embed_dim=16,
-                    H=self.d_nt if self.method == "trace" else params.get("d_nt", 7),
+                    H=self.d_nt if self.method == "trace" else params.get("d_nt", 6),
                 ).to(self.device)
             else:
                 self.completer = TaobaoCompleter(
@@ -117,42 +114,29 @@ class Solver:
     def _compute_reliability_gate(self, p_online, q_completer, m):
         # v in [0,1]
         v = confidence_score(q_completer)              # 1 - H(q)
-
         # H(p) in [0,1]
         H_p = binary_entropy_bits(p_online)            # bits entropy
-
         # kappa in [0,1], sparsity = 1-kappa
         kappa = m.float().sum(dim=1) / float(self.d_nt)
         sparsity = (1.0 - kappa).clamp(0.0, 1.0)
-
-        # parameter-free reliability
-        w = (v * H_p * sparsity).clamp(0.0, 1.0)
+        w = torch.sigmoid(H_p) * torch.sigmoid(v) * torch.sigmoid(sparsity)
+        w = w.clamp(0.0, 1.0)
         w = torch.nan_to_num(w, nan=0.0, posinf=1.0, neginf=0.0)
-
         return w.detach(), v.detach(), H_p.detach(), kappa.detach()
-
 
     # Horizon weight computation  eta_h  (Sec. 3.1, Eq. 6)
 
     def compute_horizon_weights(self, y, d):
-        """
-        Compute per-horizon weights eta_h from training-set statistics.
-        Combines a temporal decay with normalised conditional entropy.
-
-        For multi-action datasets (K>1), uses the primary action (pay)
-        for conditional entropy computation.
-        """
         assert self.y_class_num == 2
         cond_entropy = []
 
         for i in range(self.d_nt):
-            # Extract primary action per horizon
             if d.dim() == 3:
-                d_i = d[:, i, 0].long()   # pay action for Taobao
+                d_i = d[:, i, 0].long()
             else:
-                d_i = d[:, i].long()       # sole action for Criteo
+                d_i = d[:, i].long()
 
-            n_cls = 2  # binary per action
+            n_cls = 2
             pdy = torch.zeros((n_cls, 2), device=d.device, dtype=torch.float32)
             for vy in range(2):
                 y_mask = (y == vy)
@@ -162,7 +146,7 @@ class Solver:
             pd = F.one_hot(d_i, n_cls).float().mean(dim=0).view(-1, 1)
             eps = 1e-12
             ce = torch.sum(pdy * torch.log(pd.clamp_min(eps))
-                           - pdy * torch.log(pdy.clamp_min(eps)))
+                        - pdy * torch.log(pdy.clamp_min(eps)))
             cond_entropy.append(ce)
 
         cond_entropy = torch.stack(cond_entropy)
@@ -172,31 +156,23 @@ class Solver:
         else:
             cond_entropy = torch.zeros_like(cond_entropy)
 
-        nt = torch.tensor(self.nt, device=d.device, dtype=torch.float32)
-        max_nt = nt.max()
-        if torch.isfinite(max_nt) and max_nt > 0:
-            nt = nt / max_nt
-
-        w_time = torch.exp(-nt)
-        w_info = torch.exp(-self.beta * cond_entropy)
-        max_w = w_info.max()
-        if torch.isfinite(max_w) and max_w > 0:
-            w_info = w_info / max_w
-
-        correction = 1.0 / torch.arange(
+        h_indices = torch.arange(1, self.d_nt + 1, device=d.device, dtype=torch.float32)
+        w_time = torch.exp(-h_indices / self.d_nt)                    # exp(-h/H)
+        w_info = torch.exp(-self.beta * cond_entropy)                  # exp(-beta * C_tilde_h)
+        correction = 1.0 / torch.arange(                               # (H-h+1)^{-1}
             self.d_nt, 0, -1, device=d.device, dtype=torch.float32)
 
-        eta = w_time * w_info
-        mean_eta = eta.mean()
+        eta = w_time * w_info * correction                             
+
+        mean_eta = eta.mean()                                          
         if torch.isfinite(mean_eta) and mean_eta > 0:
             eta = eta / mean_eta
-        eta = eta * correction
         eta = torch.nan_to_num(eta, nan=1.0, posinf=1.0, neginf=1.0)
 
         self.eta = eta.to(self.device)
         assert torch.isfinite(self.eta).all(), f"eta contains NaN/Inf: {self.eta}"
 
-
+  
     def _get_label_from_d(self, d, h_idx):
         """Extract binary label at horizon h_idx (pay action for multi-action)."""
         if d.dim() == 3:
@@ -289,7 +265,6 @@ class Solver:
                 _label = d_label.contiguous().view(B * self.d_nt * self.K)
 
             d_loss = F.nll_loss(F.log_softmax(_pred, dim=1), _label, reduction="mean")
-
 
             self.optimizer_psi.zero_grad()
             d_loss.backward()
