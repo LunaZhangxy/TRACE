@@ -18,7 +18,7 @@ criteo_emb_size = 32
 criteo_x_emb_size = (len(cate_bin_size) + len(num_bin_size)) * criteo_emb_size
 criteo_z_size = 128
 
-criteo_dt_ts = [0,
+criteo_dt_ts = [
                 SECONDS_AN_HOUR // 10,  # 6 min
                 SECONDS_AN_HOUR // 4, # 15 min
                 SECONDS_AN_HOUR, # 1 hour
