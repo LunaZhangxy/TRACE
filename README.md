@@ -22,7 +22,7 @@ Checkpoints are saved to `./pretrain_model/`.
 
 ### 2. Streaming Evaluation
 
-Run the full streaming train-and-predict loop:
+Run the online streaming experiment:
 
 ```bash
 # TRACE on Criteo
