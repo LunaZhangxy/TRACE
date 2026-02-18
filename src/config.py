@@ -41,7 +41,7 @@ experiment_params = {
         "d_size": 6,
         "d_nt": len(taobao_dt_ts),
         "nt": taobao_dt_ts,
-        "alpha": 2,
+        "beta": 2,
     },
     "taobao_oracle": {
         "dataset": "taobao",
@@ -51,7 +51,7 @@ experiment_params = {
         "d_size": 6,
         "d_nt": len(taobao_dt_ts),
         "nt": taobao_dt_ts,
-        "alpha": 2,
+        "beta": 2,
     },
     "criteo_trace": {
         "dataset": "criteo",
@@ -62,9 +62,8 @@ experiment_params = {
         "d_size": 2,
         "d_nt": 7,
         "nt": criteo_dt_ts,
-        "alpha": 2,
+        "beta": 2,
         "lambda_con": 0.1,
-        "fuse_enable": True,
         "completer_ckpt_path": "./pretrain_model/criteo_completer.pt",       
 },
     "taobao_trace": {
@@ -76,8 +75,7 @@ experiment_params = {
         "d_size": 6,
         "d_nt": len(taobao_dt_ts),
         "nt": taobao_dt_ts,
-        "alpha": 2,
-        "fuse_enable": True,
+        "beta": 2,
         "lambda_con": 0.1,
         "completer_ckpt_path": "./pretrain_model/taobao_completer.pt",
     },
