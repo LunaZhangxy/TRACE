@@ -60,7 +60,7 @@ experiment_params = {
         "y_class_num": 2,
         "d_type": "category",
         "d_size": 2,
-        "d_nt": 7,
+        "d_nt": 6,
         "nt": criteo_dt_ts,
         "beta": 2,
         "lambda_con": 0.1,
