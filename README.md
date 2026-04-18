@@ -1,5 +1,6 @@
 # Follow the TRACE: Exploiting Post-Click Trajectories for Online Delayed Conversion Rate Prediction
 
+Official implementation of SIGIR 2026 short paper Follow the TRACE: Exploiting Post-Click Trajectories for Online Delayed Conversion Rate Prediction.
 ## Quick Start
 ### 0. Dataset
 
